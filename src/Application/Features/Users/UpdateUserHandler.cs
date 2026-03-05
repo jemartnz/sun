@@ -53,6 +53,7 @@ public sealed class UpdateUserHandler : IRequestHandler<UpdateUserCommand, Resul
             user.FirstName,
             user.LastName,
             user.Email.Value,
+            user.Role.ToString(),
             user.CreatedAtUtc));
     }
 }

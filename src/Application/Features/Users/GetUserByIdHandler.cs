@@ -27,6 +27,7 @@ public sealed class GetUserByIdHandler : IRequestHandler<GetUserByIdQuery, Resul
             user.FirstName,
             user.LastName,
             user.Email.Value,
+            user.Role.ToString(),
             user.CreatedAtUtc));
     }
 }

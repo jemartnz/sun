@@ -37,6 +37,7 @@ public sealed class UpdateUserAddressHandler : IRequestHandler<UpdateUserAddress
             user.FirstName,
             user.LastName,
             user.Email.Value,
+            user.Role.ToString(),
             user.CreatedAtUtc));
     }
 }

@@ -22,7 +22,7 @@ public sealed class GetUsersHandler : IRequestHandler<GetUsersQuery, Result<Page
             request.SortBy, request.SortOrder, ct);
 
         var items = users
-            .Select(u => new UserResponse(u.Id, u.FirstName, u.LastName, u.Email.Value, u.CreatedAtUtc))
+            .Select(u => new UserResponse(u.Id, u.FirstName, u.LastName, u.Email.Value, u.Role.ToString(), u.CreatedAtUtc))
             .ToList();
 
         return Result<PagedResponse<UserResponse>>.Success(

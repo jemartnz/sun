@@ -40,5 +40,10 @@ public sealed class UserConfig : IEntityTypeConfiguration<User>
             address.Property(a => a.Country).HasColumnName("Country").HasMaxLength(100);
             address.Property(a => a.ZipCode).HasColumnName("ZipCode").HasMaxLength(20);
         });
+
+        builder.Property(u => u.Role)
+               .HasConversion<string>()
+               .HasMaxLength(20)
+               .IsRequired();
     }
 }

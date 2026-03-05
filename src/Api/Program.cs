@@ -3,6 +3,7 @@ using Application;
 using Infrastructure;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -67,7 +68,15 @@ public class Program
                 };
             });
 
-        builder.Services.AddAuthorization();
+        builder.Services.AddAuthorization(options =>
+        {
+            options.AddPolicy("AdminOnly", policy =>
+                policy.RequireRole("Admin"));
+
+            options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .Build();
+        });
 
         // ============================================================
         // 4. RATE LIMITING
@@ -117,6 +126,9 @@ public class Program
 
         // Aplicar Migraciones Automaticamente
         await app.Services.ApplyMigrationsAsync();
+
+        // Seed de usuario administrador
+        await app.Services.SeedAdminAsync();
 
         if (app.Environment.IsDevelopment())
         {

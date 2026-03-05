@@ -5,5 +5,5 @@ public sealed record UserResponse(
     string FirstName,
     string LastName,
     string Email,
-    DateTime CreatedAtUtc
-    );
+    string Role,
+    DateTime CreatedAtUtc);

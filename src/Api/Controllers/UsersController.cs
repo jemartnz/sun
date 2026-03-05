@@ -49,6 +49,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
         var result = await _sender.Send(new DeleteUserCommand(id), ct);

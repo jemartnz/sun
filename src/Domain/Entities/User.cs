@@ -1,6 +1,6 @@
 ﻿using Domain.Commons;
+using Domain.Enums;
 using Domain.ValueObjects;
-using System.Xml.Linq;
 
 namespace Domain.Entities;
 
@@ -11,6 +11,7 @@ public sealed class User : BaseEntity
     public Email Email { get; private set; }
     public string PasswordHash { get; private set; }
     public Address? Address { get; private set; }
+    public UserRole Role { get; private set; }
 
     private User()
     {
@@ -18,17 +19,24 @@ public sealed class User : BaseEntity
         LastName = null!;
         PasswordHash = null!;
         Email = null!;
+        Role = UserRole.User;
     }
 
-    private User(string firstName, string lastName, Email email, string passwordHash)
+    private User(string firstName, string lastName, Email email, string passwordHash, UserRole role)
     {
         FirstName = firstName;
         LastName = lastName;
         Email = email;
         PasswordHash = passwordHash;
+        Role = role;
     }
 
-    public static Result<User> Create(string firstName, string lastName, Email email, string passwordHash)
+    public static Result<User> Create(
+        string firstName,
+        string lastName,
+        Email email,
+        string passwordHash,
+        UserRole role = UserRole.User)
     {
         if (string.IsNullOrWhiteSpace(firstName))
             return Result<User>.Failure(UserErrors.FirstNameRequired);
@@ -36,7 +44,7 @@ public sealed class User : BaseEntity
         if (string.IsNullOrWhiteSpace(lastName))
             return Result<User>.Failure(UserErrors.LastNameRequired);
 
-        var user = new User(firstName.Trim(), lastName.Trim(), email, passwordHash);
+        var user = new User(firstName.Trim(), lastName.Trim(), email, passwordHash, role);
         return Result<User>.Success(user);
     }
 
@@ -52,6 +60,12 @@ public sealed class User : BaseEntity
         LastName = lastName;
         Email = email;
         PasswordHash = passwordHash;
+        MarkAsUpdated();
+    }
+
+    public void AssignRole(UserRole role)
+    {
+        Role = role;
         MarkAsUpdated();
     }
 }

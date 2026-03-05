@@ -25,6 +25,7 @@ public sealed class JwtTokenGenerator : ITokenGenerator
             [JwtRegisteredClaimNames.Sub] = user.Id.ToString(),
             [JwtRegisteredClaimNames.Email] = user.Email.Value,
             [ClaimTypes.Name] = $"{user.FirstName} {user.LastName}",
+            [ClaimTypes.Role] = user.Role.ToString(),
             [JwtRegisteredClaimNames.Jti] = Guid.NewGuid().ToString()
         };
 
