@@ -1,8 +1,12 @@
 using Infrastructure.Persistence;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Testcontainers.MsSql;
 
 namespace Api.Tests;
@@ -28,6 +32,24 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
             services.AddDbContext<AppDbContext>(options =>
                 options.UseSqlServer(_sqlContainer.GetConnectionString()));
+
+            // Reemplazar el rate limiter con un límite muy alto para tests
+            var rateLimiterDescriptors = services
+                .Where(d => d.ServiceType == typeof(IConfigureOptions<RateLimiterOptions>))
+                .ToList();
+            foreach (var d in rateLimiterDescriptors)
+                services.Remove(d);
+
+            services.AddRateLimiter(options =>
+            {
+                options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+                options.AddFixedWindowLimiter("fixed", config =>
+                {
+                    config.PermitLimit = int.MaxValue;
+                    config.Window = TimeSpan.FromMinutes(1);
+                    config.QueueLimit = 0;
+                });
+            });
         });
     }
 

@@ -21,10 +21,15 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<IOrderRepository, OrderRepository>();
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 
         // Seguridad
         services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();
         services.AddSingleton<ITokenGenerator, JwtTokenGenerator>();
+
+        // Health Checks
+        services.AddHealthChecks()
+            .AddCheck<DatabaseHealthCheck>("sql-server");
 
         return services;
     }

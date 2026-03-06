@@ -29,11 +29,13 @@ public sealed class JwtTokenGenerator : ITokenGenerator
             [JwtRegisteredClaimNames.Jti] = Guid.NewGuid().ToString()
         };
 
+        var expiryMinutes = _config.GetValue<int>("Jwt:ExpiryMinutes", 15);
+
         var descriptor = new SecurityTokenDescriptor
         {
             Issuer = _config["Jwt:Issuer"],
             Audience = _config["Jwt:Audience"],
-            Expires = DateTime.UtcNow.AddHours(2),
+            Expires = DateTime.UtcNow.AddMinutes(expiryMinutes),
             SigningCredentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256),
             Claims = claims
         };

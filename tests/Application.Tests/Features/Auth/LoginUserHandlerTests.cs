@@ -2,6 +2,7 @@ using Application.Features.Auth;
 using Application.Interfaces;
 using Domain.Entities;
 using Domain.ValueObjects;
+using Microsoft.Extensions.Configuration;
 
 namespace Application.Tests.Features.Auth;
 
@@ -10,11 +11,16 @@ public sealed class LoginUserHandlerTests
     private readonly IUserRepository _userRepository = Substitute.For<IUserRepository>();
     private readonly IPasswordHasher _passwordHasher = Substitute.For<IPasswordHasher>();
     private readonly ITokenGenerator _tokenGenerator = Substitute.For<ITokenGenerator>();
+    private readonly IRefreshTokenRepository _refreshTokenRepository = Substitute.For<IRefreshTokenRepository>();
+    private readonly IConfiguration _configuration = Substitute.For<IConfiguration>();
     private readonly LoginUserHandler _handler;
 
     public LoginUserHandlerTests()
     {
-        _handler = new LoginUserHandler(_userRepository, _passwordHasher, _tokenGenerator);
+        _configuration["Jwt:RefreshTokenExpiryDays"].Returns("7");
+        _handler = new LoginUserHandler(
+            _userRepository, _passwordHasher, _tokenGenerator,
+            _refreshTokenRepository, _configuration);
     }
 
     private static User CreateUser()

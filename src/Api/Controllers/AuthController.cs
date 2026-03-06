@@ -29,4 +29,18 @@ public sealed class AuthController : ControllerBase
         var result = await _sender.Send(command, ct);
         return result.ToActionResult();
     }
+
+    [HttpPost("refresh")]
+    public async Task<IActionResult> Refresh(RefreshTokenCommand command, CancellationToken ct)
+    {
+        var result = await _sender.Send(command, ct);
+        return result.ToActionResult();
+    }
+
+    [HttpPost("revoke")]
+    public async Task<IActionResult> Revoke(RevokeTokenCommand command, CancellationToken ct)
+    {
+        var result = await _sender.Send(command, ct);
+        return result.ToNoContentResult();
+    }
 }

@@ -24,7 +24,9 @@ public partial class Program
         // ============================================================
         // Serilog reemplaza el logger por defecto de .NET.
         // Escribe logs estructurados a consola Y a un archivo de texto.
-        Log.Logger = new LoggerConfiguration()
+        var seqUrl = builder.Configuration["Seq:ServerUrl"];
+
+        var logConfig = new LoggerConfiguration()
             .MinimumLevel.Information()
             .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
             .MinimumLevel.Override("Microsoft.Hosting.Lifetime", Serilog.Events.LogEventLevel.Information)
@@ -33,8 +35,12 @@ public partial class Program
                 path: "logs/log-.txt",
                 rollingInterval: RollingInterval.Day,  // Un archivo por día: log-2026-02-11.txt
                 retainedFileCountLimit: 30,             // Mantener últimos 30 días
-                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
-            .CreateLogger();
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}");
+
+        if (!string.IsNullOrWhiteSpace(seqUrl))
+            logConfig = logConfig.WriteTo.Seq(seqUrl);
+
+        Log.Logger = logConfig.CreateLogger();
 
         builder.Host.UseSerilog();
 
@@ -96,6 +102,26 @@ public partial class Program
             });
         });
 
+        // ============================================================
+        // 5. CORS
+        // ============================================================
+        // Origenes permitidos configurados en appsettings.json (Cors:AllowedOrigins).
+        // En produccion sobreescribir con variable de entorno: Cors__AllowedOrigins__0=https://miapp.com
+        var allowedOrigins = builder.Configuration
+            .GetSection("Cors:AllowedOrigins")
+            .Get<string[]>() ?? [];
+
+        builder.Services.AddCors(options =>
+        {
+            options.AddPolicy("AllowConfigured", policy =>
+            {
+                if (builder.Environment.IsDevelopment() || allowedOrigins.Length == 0)
+                    policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+                else
+                    policy.WithOrigins(allowedOrigins).AllowAnyMethod().AllowAnyHeader();
+            });
+        });
+
         // Controllers y Swagger
         builder.Services.AddControllers();
         builder.Services.AddEndpointsApiExplorer();
@@ -131,6 +157,9 @@ public partial class Program
         // Seed de usuario administrador
         await app.Services.SeedAdminAsync();
 
+        // Health check — accesible sin auth ni rate limit (para monitoreo)
+        app.MapHealthChecks("/health").AllowAnonymous();
+
         if (app.Environment.IsDevelopment())
         {
             app.UseSwagger();
@@ -138,7 +167,7 @@ public partial class Program
         }
 
         // Orden del pipeline importa:
-        app.UseCors("AllowAll");
+        app.UseCors("AllowConfigured");
         app.UseMiddleware<ExceptionMiddleware>();          // 1° Atrapa excepciones
         app.UseSerilogRequestLogging();                    // 2° Loguea cada request HTTP
         app.UseRateLimiter();                              // 3° Limita requests
