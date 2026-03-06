@@ -1,12 +1,14 @@
 ﻿using Api.Extensions;
 using Application.Features.Auth;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[AllowAnonymous]
 public sealed class AuthController : ControllerBase
 {
     private readonly ISender _sender;

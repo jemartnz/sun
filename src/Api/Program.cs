@@ -13,7 +13,7 @@ using System.Threading.RateLimiting;
 
 namespace Api;
 
-public class Program
+public partial class Program
 {
     static async Task Main(string[] args)
     {
@@ -55,6 +55,7 @@ public class Program
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
+                options.MapInboundClaims = false;
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
