@@ -4,6 +4,8 @@ using Domain.Commons;
 using Domain.Entities;
 using Domain.ValueObjects;
 using MediatR;
+using Microsoft.Extensions.Configuration;
+using System.Security.Cryptography;
 
 namespace Application.Features.Auth;
 
@@ -12,15 +14,21 @@ public sealed class RegisterUserHandler : IRequestHandler<RegisterUserCommand, R
     private readonly IUserRepository _userRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ITokenGenerator _tokenGenerator;
+    private readonly IRefreshTokenRepository _refreshTokenRepository;
+    private readonly int _refreshTokenExpiryDays;
 
     public RegisterUserHandler(
         IUserRepository userRepository,
         IPasswordHasher passwordHasher,
-        ITokenGenerator tokenGenerator)
+        ITokenGenerator tokenGenerator,
+        IRefreshTokenRepository refreshTokenRepository,
+        IConfiguration configuration)
     {
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
         _tokenGenerator = tokenGenerator;
+        _refreshTokenRepository = refreshTokenRepository;
+        _refreshTokenExpiryDays = int.TryParse(configuration["Jwt:RefreshTokenExpiryDays"], out var days) ? days : 7;
     }
 
     public async Task<Result<AuthResponse>> Handle(RegisterUserCommand request, CancellationToken ct)
@@ -48,14 +56,21 @@ public sealed class RegisterUserHandler : IRequestHandler<RegisterUserCommand, R
         if (userResult.IsFailure)
             return Result<AuthResponse>.Failure(userResult.Error);
 
-        // 6. Persistir
+        // 6. Persistir usuario
         await _userRepository.AddAsync(userResult.Value, ct);
         await _userRepository.SaveChangesAsync(ct);
 
-        // 7. Generar token
-        var token = _tokenGenerator.Generate(userResult.Value);
+        // 7. Generar access token y refresh token
+        var accessToken = _tokenGenerator.Generate(userResult.Value);
+        var refreshTokenValue = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+        var refreshToken = RefreshToken.Create(
+            userResult.Value.Id, refreshTokenValue,
+            DateTime.UtcNow.AddDays(_refreshTokenExpiryDays));
+
+        await _refreshTokenRepository.AddAsync(refreshToken, ct);
+        await _refreshTokenRepository.SaveChangesAsync(ct);
 
         return Result<AuthResponse>.Success(
-            new AuthResponse(token, userResult.Value.Id, emailResult.Value.Value));
+            new AuthResponse(accessToken, refreshTokenValue, userResult.Value.Id, emailResult.Value.Value));
     }
 }

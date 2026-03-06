@@ -282,19 +282,19 @@ Sun/
 
 ---
 
-### Fase 10 — Mejoras de Infraestructura 📋
+### Fase 10 — Mejoras de Infraestructura ✅
 
 > Objetivo: preparar el proyecto para producción.
+> Total: 12 tests nuevos — 128 tests acumulados, 0 fallidos.
 
 | Feature | Estado | Detalle |
 |---------|--------|---------|
-| Health Checks | 💡 | /health endpoint para monitoreo (BD, servicios) |
-| CORS | 💡 | Configurar orígenes permitidos |
-| Response Caching | 💡 | Cache para endpoints de lectura frecuente |
-| Refresh Tokens | 💡 | JWT de corta duración + refresh token para renovar |
-| Dockerización de la API | 💡 | Dockerfile + docker-compose (API + SQL Server) |
-| Variables de entorno | 💡 | Mover secrets de appsettings a env vars / User Secrets |
-| Seq o Elasticsearch | 💡 | Sink de Serilog para búsqueda de logs en producción |
+| Health Checks | ✅ | GET /health — AllowAnonymous, sin rate limit. DatabaseHealthCheck via context.Database.CanConnectAsync() |
+| CORS | ✅ | Politica AllowConfigured — permisiva en Development, origenes desde Cors:AllowedOrigins en Production |
+| Refresh Tokens | ✅ | JWT 15 min + RefreshToken 7 dias. POST /api/auth/refresh (rotacion) y POST /api/auth/revoke |
+| Dockerizacion de la API | ✅ | Dockerfile multi-stage (.NET 10, usuario no-root) + docker-compose (API + SQL Server + Seq) |
+| Variables de entorno | ✅ | .env.example documenta todas las variables. Override automatico en runtime via env vars |
+| Seq (Serilog) | ✅ | Serilog.Sinks.Seq — activo solo si Seq:ServerUrl esta configurado. Incluido en docker-compose |
 
 ---
 

@@ -1,0 +1,54 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2025-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "${SA_PASSWORD:-YourStrong!Passw0rd}"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "${SA_PASSWORD:-YourStrong!Passw0rd}", "-Q", "SELECT 1", "-No"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  seq:
+    image: datalust/seq:latest
+    environment:
+      ACCEPT_EULA: "Y"
+    ports:
+      - "5341:5341"
+      - "8081:80"
+    volumes:
+      - seq_data:/data
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Sun: "Server=sqlserver,1433;Database=SunDb;User Id=sa;Password=${SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=true"
+      Jwt__Secret: "${JWT_SECRET:-RXN0YUVzVW5hQ2xhdmVTZWNyZXRhTXV5TGFyZ2FRdWVEZWJlVGVuZXJBbE1lbm9zMzJDYXJhY3RlcmVzIQ==}"
+      Jwt__Issuer: "${JWT_ISSUER:-SunApp}"
+      Jwt__Audience: "${JWT_AUDIENCE:-SunApp}"
+      Jwt__ExpiryMinutes: "${JWT_EXPIRY_MINUTES:-15}"
+      Jwt__RefreshTokenExpiryDays: "${JWT_REFRESH_EXPIRY_DAYS:-7}"
+      AdminSeed__Email: "${ADMIN_EMAIL:-admin@sun.app}"
+      AdminSeed__Password: "${ADMIN_PASSWORD:-Admin1234!}"
+      Cors__AllowedOrigins__0: "${CORS_ORIGIN_0:-http://localhost:3000}"
+      Seq__ServerUrl: "http://seq:5341"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      seq:
+        condition: service_started
+
+volumes:
+  sqlserver_data:
+  seq_data:

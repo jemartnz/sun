@@ -29,7 +29,8 @@ Sun/
 |   |   |   |-- User.cs                  <- Email, PasswordHash, Address (VO, opcional), Role (UserRole), AssignRole()
 |   |   |   |-- Product.cs               <- Price (VO), Stock, ReduceStock() con validacion
 |   |   |   |-- Order.cs                 <- Aggregate Root: UserId, Status, Items, Create() valida y reduce stock
-|   |   |   +-- OrderItem.cs             <- ProductId, Quantity, UnitPrice (snapshot Price VO). Create() es internal
+|   |   |   |-- OrderItem.cs             <- ProductId, Quantity, UnitPrice (snapshot Price VO). Create() es internal
+|   |   |   +-- RefreshToken.cs          <- Token, UserId, ExpiresAtUtc, IsRevoked. IsActive, Revoke(), Errors anidados
 |   |   |-- Enums/
 |   |   |   |-- UserRole.cs              <- enum UserRole { User, Admin }
 |   |   |   +-- OrderStatus.cs           <- enum OrderStatus { Pending }
@@ -46,13 +47,13 @@ Sun/
 |   |   |-- Common/
 |   |   |   +-- PagedRequest.cs / PagedResponse.cs <- Paginacion generica
 |   |   |-- DTOs/
-|   |   |   |-- AuthResponse.cs          <- record(Token, UserId, Email)
+|   |   |   |-- AuthResponse.cs          <- record(Token, RefreshToken, UserId, Email)
 |   |   |   |-- UserResponse.cs          <- record(Id, FirstName, LastName, Email, Role, CreatedAtUtc)
 |   |   |   |-- ProductResponse.cs       <- record(Id, Name, Description, PriceAmount, PriceCurrency, Stock)
 |   |   |   |-- OrderResponse.cs         <- record(Id, UserId, Status, Items, CreatedAtUtc)
 |   |   |   +-- OrderItemResponse.cs     <- record(ProductId, Quantity, UnitPriceAmount, UnitPriceCurrency)
 |   |   |-- Features/
-|   |   |   |-- Auth/                    <- Register + Login (Commands + Handlers + Validators)
+|   |   |   |-- Auth/                    <- Register + Login + RefreshToken + RevokeToken (Commands + Handlers + Validators)
 |   |   |   |-- Products/                <- CRUD completo + Stock (Commands/Queries + Handlers + Validators)
 |   |   |   |-- Users/                   <- CRUD completo (Commands/Queries + Handlers)
 |   |   |   +-- Orders/                  <- CreateOrder (Command + Handler + Validator)
@@ -60,9 +61,10 @@ Sun/
 |   |   |   |-- IUserRepository.cs       <- GetByIdAsync, GetByEmailAsync, AddAsync, RemoveAsync, SaveChangesAsync
 |   |   |   |-- IProductRepository.cs    <- GetByIdAsync, GetAllAsync, AddAsync, RemoveAsync, SaveChangesAsync
 |   |   |   |-- IOrderRepository.cs      <- AddAsync, GetByIdAsync (Include Items), SaveChangesAsync
+|   |   |   |-- IRefreshTokenRepository.cs <- AddAsync, GetByTokenAsync, SaveChangesAsync
 |   |   |   |-- IPasswordHasher.cs       <- Hash(string), Verify(string, string)
 |   |   |   +-- ITokenGenerator.cs       <- Generate(User)
-|   |   +-- Application.csproj           <- Paquetes: MediatR 14, FluentValidation
+|   |   +-- Application.csproj           <- Paquetes: MediatR 14, FluentValidation, Microsoft.Extensions.Configuration.Abstractions
 |   |
 |   |-- Infrastructure/                  <- Implementaciones tecnicas. Depende de Application.
 |   |   |-- Persistence/
@@ -70,23 +72,26 @@ Sun/
 |   |   |   |   |-- UserConfig.cs        <- OwnsOne Email, OwnsOne Address (nullable), Role como string
 |   |   |   |   |-- ProductConfig.cs     <- OwnsOne Price
 |   |   |   |   |-- OrderConfig.cs       <- HasMany Items (cascade), Status como string
-|   |   |   |   +-- OrderItemConfig.cs   <- OwnsOne UnitPrice
+|   |   |   |   |-- OrderItemConfig.cs   <- OwnsOne UnitPrice
+|   |   |   |   +-- RefreshTokenConfig.cs <- HasIndex Token (unique), IsRevoked, ExpiresAtUtc
 |   |   |   |-- Migrations/              <- Generadas con dotnet ef, auto-aplicadas al arrancar
-|   |   |   |-- AppDbContext.cs          <- DbSet<User>, DbSet<Product>, DbSet<Order>
+|   |   |   |-- AppDbContext.cs          <- DbSet<User>, DbSet<Product>, DbSet<Order>, DbSet<RefreshToken>
 |   |   |   |-- DatabaseMigrator.cs      <- ApplyMigrationsAsync()
 |   |   |   |-- DatabaseSeeder.cs        <- SeedAdminAsync() — crea admin si no existe (lee AdminSeed config)
+|   |   |   |-- DatabaseHealthCheck.cs   <- IHealthCheck: context.Database.CanConnectAsync()
 |   |   |   |-- UserRepository.cs
 |   |   |   |-- ProductRepository.cs
-|   |   |   +-- OrderRepository.cs       <- Include(o => o.Items) en GetByIdAsync
+|   |   |   |-- OrderRepository.cs       <- Include(o => o.Items) en GetByIdAsync
+|   |   |   +-- RefreshTokenRepository.cs <- GetByTokenAsync (FirstOrDefault por Token)
 |   |   |-- Security/
 |   |   |   |-- Argon2PasswordHasher.cs  <- Argon2id: salt 16B, hash 32B, 64MB RAM, 3 iteraciones
 |   |   |   +-- JwtTokenGenerator.cs     <- JsonWebTokenHandler + SecurityTokenDescriptor + ClaimTypes.Role
-|   |   |-- DependencyInjection.cs       <- AddInfrastructure() registra repos, hasher, token generator
+|   |   |-- DependencyInjection.cs       <- AddInfrastructure() registra repos, hasher, token generator, health check
 |   |   +-- Infrastructure.csproj
 |   |
 |   +-- Api/                             <- Punto de entrada HTTP.
 |       |-- Controllers/
-|       |   |-- AuthController.cs        <- [AllowAnonymous] — POST register, POST login
+|       |   |-- AuthController.cs        <- [AllowAnonymous] — POST register, login, refresh, revoke
 |       |   |-- UsersController.cs       <- CRUD completo; DELETE solo Admin
 |       |   |-- ProductsController.cs    <- CRUD completo
 |       |   +-- OrdersController.cs      <- POST /api/orders — extrae UserId del claim "sub"
@@ -94,8 +99,8 @@ Sun/
 |       |   +-- ResultExtensions.cs      <- ToActionResult() y ToNoContentResult() — convierte Result a HTTP
 |       |-- Middlewares/
 |       |   +-- ExceptionMiddleware.cs   <- ValidationException -> 422, Exception -> 500 + log
-|       |-- Program.cs                   <- Serilog, JWT (MapInboundClaims=false), RBAC, Rate Limiting, Swagger
-|       +-- Api.csproj
+|       |-- Program.cs                   <- Serilog+Seq, JWT, CORS, RBAC, Rate Limiting, Swagger, Health Checks
+|       +-- Api.csproj                   <- Paquetes: Serilog.AspNetCore, Serilog.Sinks.File, Serilog.Sinks.Seq, Swashbuckle
 |
 +-- tests/
     |-- Domain.Tests/                    <- 66 tests — xUnit + FluentAssertions
@@ -110,12 +115,13 @@ Sun/
     |       |-- Users/                   <- GetUserByIdHandler
     |       |-- Products/                <- CreateProductHandler
     |       +-- Orders/                  <- CreateOrderHandler
-    +-- Api.Tests/                       <- 26 tests — xUnit + FluentAssertions + Testcontainers + Respawn
+    +-- Api.Tests/                       <- 38 tests — xUnit + FluentAssertions + Testcontainers + Respawn
         |-- GlobalUsings.cs
-        |-- ApiFactory.cs                <- WebApplicationFactory<Program> + MsSqlContainer, aplica migraciones
+        |-- ApiFactory.cs                <- WebApplicationFactory<Program> + MsSqlContainer + override rate limiter (PermitLimit=MaxValue)
         |-- DatabaseCleaner.cs           <- Respawn wrapper, ignora __EFMigrationsHistory
         |-- BaseIntegrationTest.cs       <- [Collection("Integration")], re-siembra admin en InitializeAsync
-        |-- Auth/
+        |-- Auth/                        <- AuthEndpointsTests, RefreshTokenEndpointsTests
+        |-- Health/                      <- HealthEndpointsTests
         |-- Users/
         |-- Products/
         +-- Orders/
@@ -149,6 +155,18 @@ Cada entidad tiene su propio archivo `IEntityTypeConfiguration<T>` en `Infrastru
 ### Migraciones Automaticas
 `DatabaseMigrator.ApplyMigrationsAsync()` se ejecuta al arrancar la API. Detecta migraciones pendientes y las aplica automaticamente.
 
+### Refresh Tokens
+Login y Register retornan `{ token, refreshToken, userId, email }`. El JWT dura 15 min (configurable via `Jwt:ExpiryMinutes`). El refresh token dura 7 dias (configurable via `Jwt:RefreshTokenExpiryDays`). Al renovar se revoca el token anterior (rotacion). `RefreshToken.IsActive` = !IsRevoked && !IsExpired.
+
+### Health Check
+`GET /health` usa `DatabaseHealthCheck` (implementa `IHealthCheck`) que llama `context.Database.CanConnectAsync()`. Registrado en `DependencyInjection.cs`. Excluido de autenticacion (`AllowAnonymous`) y rate limiting.
+
+### CORS
+Politica `AllowConfigured`. En Development permite cualquier origen. En Production usa la lista de `Cors:AllowedOrigins` en config. Override via env vars: `Cors__AllowedOrigins__0=https://...`
+
+### Seq (Logging)
+`Serilog.Sinks.Seq` agregado a `Api.csproj`. Solo activo si `Seq:ServerUrl` no esta vacio. En docker-compose, Seq corre en puerto 5341 (API) y 8081 (UI).
+
 ---
 
 ## Decisiones Tecnicas Clave
@@ -163,6 +181,9 @@ Cada entidad tiene su propio archivo `IEntityTypeConfiguration<T>` en `Infrastru
 | Testcontainers sobre EF InMemory | SQL Server real garantiza que migraciones, constraints y `OwnsOne` funcionen igual que produccion |
 | Respawn + re-seed en `InitializeAsync` | Respawn limpia datos entre tests. El admin se re-siembra antes de cada test para que `LoginAsAdminAsync` funcione |
 | `ValidationBehavior` lanza excepcion | Lanza `FluentValidation.ValidationException`. `ExceptionMiddleware` la captura -> HTTP 422 |
+| `GetValue<T>` no disponible en Abstractions | `Microsoft.Extensions.Configuration.Abstractions` solo tiene `IConfiguration`. Usar `int.TryParse(config["key"], out var v)` en Application layer |
+| Rate limiter override en ApiFactory | `IConfigureOptions<RateLimiterOptions>` removidos y reemplazados con `PermitLimit=int.MaxValue` para evitar 429 en tests. Requiere `<FrameworkReference Include="Microsoft.AspNetCore.App" />` en Api.Tests.csproj |
+| RefreshToken con errores anidados | `RefreshToken.Errors.Invalid` -> 400, `RefreshToken.Errors.NotFound` -> 404 (el codigo contiene "NotFound") |
 
 ---
 
@@ -180,6 +201,9 @@ Cada entidad tiene su propio archivo `IEntityTypeConfiguration<T>` en `Infrastru
 | Logging | Serilog -> Consola + Archivo (logs/log-{fecha}.txt) |
 | Documentacion | Swagger/Swashbuckle |
 | Rate Limiting | Fixed Window: 60 requests/minuto por IP |
+| Health Checks | Microsoft.Extensions.Diagnostics.HealthChecks (built-in) + DatabaseHealthCheck custom |
+| Logging produccion | Serilog.Sinks.Seq (opcional, configurable) |
+| Contenedores | Dockerfile multi-stage + docker-compose (API + SQL Server + Seq) |
 | Tests unitarios | xUnit + FluentAssertions + NSubstitute |
 | Tests integracion | xUnit + Testcontainers (SQL Server) + Respawn + WebApplicationFactory |
 
@@ -204,6 +228,9 @@ Cada entidad tiene su propio archivo `IEntityTypeConfiguration<T>` en `Infrastru
 | PATCH | `/api/products/{id}/stock` | JWT | Any | Actualizar stock |
 | DELETE | `/api/products/{id}` | JWT | Any | Eliminar producto (HTTP 204) |
 | POST | `/api/orders` | JWT | Any | Crear orden — reduce stock automaticamente |
+| POST | `/api/auth/refresh` | No | — | Renovar JWT con refresh token (rotacion) |
+| POST | `/api/auth/revoke` | No | — | Revocar refresh token (logout) |
+| GET | `/health` | No | — | Estado de la API y BD. Responde "Healthy" / "Unhealthy" |
 
 Swagger UI disponible en: `http://localhost:5000/swagger/`
 
@@ -220,20 +247,35 @@ Swagger UI disponible en: `http://localhost:5000/swagger/`
   "Jwt": {
     "Secret": "RXN0YUVzVW5hQ2xhdmVTZWNyZXRhTXV5TGFyZ2FRdWVEZWJlVGVuZXJBbE1lbm9zMzJDYXJhY3RlcmVzIQ==",
     "Issuer": "SunApp",
-    "Audience": "SunApp"
+    "Audience": "SunApp",
+    "ExpiryMinutes": 15,
+    "RefreshTokenExpiryDays": 7
   },
   "AdminSeed": {
     "Email": "admin@sun.app",
     "Password": "Admin1234!"
+  },
+  "Cors": {
+    "AllowedOrigins": [ "http://localhost:3000", "http://localhost:5173" ]
+  },
+  "Seq": {
+    "ServerUrl": ""
   }
 }
 ```
 
-### Docker SQL Server
+### Docker Compose (API + SQL Server + Seq)
+```bash
+docker compose up -d
+# API en http://localhost:8080
+# Seq UI en http://localhost:8081
+```
+
+### Docker SQL Server (standalone)
 ```bash
 docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=YourStrong!Passw0rd" \
   -p 1433:1433 --name sqlserver \
-  -d mcr.microsoft.com/mssql/server:2022-latest
+  -d mcr.microsoft.com/mssql/server:2025-latest
 ```
 
 ---
@@ -281,9 +323,9 @@ Error inesperado (BD caida)           -> Excepcion            -> ExceptionMiddle
 ## Dependencia entre Capas (Regla Estricta)
 
 - **Domain**: No referencia a ningun otro proyecto. Cero paquetes NuGet.
-- **Application**: Referencia solo a Domain. Paquetes: MediatR, FluentValidation.
+- **Application**: Referencia solo a Domain. Paquetes: MediatR, FluentValidation, Microsoft.Extensions.Configuration.Abstractions.
 - **Infrastructure**: Referencia a Application y Domain. Paquetes: EF Core, Argon2, JWT.
-- **Api**: Referencia a Application, Domain e Infrastructure. Paquetes: Serilog, Swashbuckle.
+- **Api**: Referencia a Application, Domain e Infrastructure. Paquetes: Serilog, Swashbuckle, Serilog.Sinks.Seq.
 
 ---
 
@@ -293,7 +335,7 @@ Error inesperado (BD caida)           -> Excepcion            -> ExceptionMiddle
 - Entidades tienen factory method estatico `Create()` que retorna `Result<T>`
 - Entidades tienen constructor privado sin parametros para EF Core con `null!`
 - Value Objects tienen constructor privado y factory method `Create()` con validacion
-- Errores de dominio agrupados en clases estaticas anidadas: `UserErrors`, `ProductErrors`, `OrderErrors`, `EmailErrors`
+- Errores de dominio agrupados en clases estaticas anidadas: `UserErrors`, `ProductErrors`, `OrderErrors`, `EmailErrors`, `RefreshToken.Errors`
 - Cada feature tiene su propia carpeta con Command/Query + Handler (+ Validator si aplica)
 - Controllers solo reciben request -> envian a MediatR -> convierten Result a HTTP response
 - Connection string se llama `"Sun"` en appsettings.json
