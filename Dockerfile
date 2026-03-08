@@ -19,13 +19,13 @@ RUN dotnet publish src/Api/Api.csproj -c Release -o /app/publish --no-restore
 # Stage 2: Runtime
 # ============================================================
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+LABEL org.opencontainers.image.source="https://github.com/jemartnz/Sun"
 WORKDIR /app
 
-# Crear usuario no-root para seguridad
-RUN adduser --disabled-password --gecos "" appuser && chown -R appuser /app
-USER appuser
+# Las imagenes .NET 10 incluyen el usuario "app" (UID 1654) por defecto
+USER app
 
-COPY --from=build /app/publish .
+COPY --from=build --chown=app /app/publish .
 
 EXPOSE 8080
 
